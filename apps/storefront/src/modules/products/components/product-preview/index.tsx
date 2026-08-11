@@ -4,6 +4,7 @@ import { HttpTypes } from "@medusajs/types"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import Thumbnail from "../thumbnail"
 import PreviewPrice from "./price"
+import ProductCardActions from "../product-card-actions"
 
 export default async function ProductPreview({
   product,
@@ -27,9 +28,17 @@ export default async function ProductPreview({
     product,
   })
 
+  const cardProduct = {
+    id: product.id,
+    handle: product.handle,
+    title: product.title,
+    thumbnail: product.thumbnail,
+    price: cheapestPrice?.calculated_price_number != null ? String(cheapestPrice.calculated_price_number) : undefined,
+  }
+
   return (
-    <LocalizedClientLink href={`/products/${product.handle}`} className="group">
-      <div data-testid="product-wrapper">
+    <div className="relative" data-testid="product-wrapper">
+      <LocalizedClientLink href={`/products/${product.handle}`} className="group block">
         <Thumbnail
           thumbnail={product.thumbnail}
           images={product.images}
@@ -44,7 +53,8 @@ export default async function ProductPreview({
             {cheapestPrice && <PreviewPrice price={cheapestPrice} />}
           </div>
         </div>
-      </div>
-    </LocalizedClientLink>
+      </LocalizedClientLink>
+      <ProductCardActions product={cardProduct} />
+    </div>
   )
 }

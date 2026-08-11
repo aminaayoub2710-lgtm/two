@@ -110,3 +110,76 @@
     @apply text-[32px] leading-[44px] font-semibold;
   }
 }
+
+
+:root {
+  color-scheme: light;
+  --cm-bg: #f7f8fa;
+  --cm-surface: rgba(255, 255, 255, 0.82);
+  --cm-ink: #0a0d12;
+  --cm-muted: #67717f;
+  --cm-border: rgba(10, 13, 18, 0.1);
+  --cm-accent: #2dd4bf;
+}
+
+.dark {
+  color-scheme: dark;
+  --cm-bg: #0a0d12;
+  --cm-surface: rgba(18, 24, 32, 0.82);
+  --cm-ink: #f8fafc;
+  --cm-muted: #a1aab7;
+  --cm-border: rgba(255, 255, 255, 0.14);
+  --cm-accent: #67e8f9;
+}
+
+html {
+  background: var(--cm-bg);
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--cm-bg);
+  color: var(--cm-ink);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(103, 232, 249, 0.32);
+}
+
+:focus-visible {
+  outline: 3px solid var(--cm-accent);
+  outline-offset: 3px;
+}
+
+@layer components {
+  .cm-glass {
+    @apply border border-black/10 bg-white/75 shadow-[0_20px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-white/5;
+  }
+
+  .cm-surface {
+    @apply rounded-2xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/5;
+  }
+
+  .cm-eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.22em] text-ui-fg-muted;
+  }
+
+  .cm-link {
+    @apply transition-colors duration-200 hover:text-ui-fg-base;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

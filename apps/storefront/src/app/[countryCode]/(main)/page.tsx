@@ -4,6 +4,7 @@ import FeaturedProducts from "@modules/home/components/featured-products"
 import Hero from "@modules/home/components/hero"
 import { listCollections } from "@lib/data/collections"
 import { getRegion } from "@lib/data/regions"
+import AIRecommendations from "@modules/commerce/components/ai-recommendations"
 
 export const metadata: Metadata = {
   title: "CommerceMind AI — Shop with more clarity",
@@ -77,6 +78,7 @@ export default async function Home(props: {
           </ul>
         </div>
       </section>
+      <AIRecommendations seed="latest collection and thoughtful essentials" />
     </>
   )
 }

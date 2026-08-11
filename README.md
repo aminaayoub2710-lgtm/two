@@ -76,3 +76,37 @@ pnpm --filter @dtc/storefront exec tsc --noEmit
 ```
 
 يتطلب `next build` الكامل وجود Medusa Backend متاحًا أثناء مرحلة جمع بيانات الصفحات الثابتة.
+
+## Enterprise storefront extensions
+
+The official Medusa Next.js Storefront remains the foundation. The new layer extends it with reusable storefront components rather than replacing its route or data architecture.
+
+| Capability | Route or component | Integration |
+|---|---|---|
+| Search | `/{countryCode}/search?q=...` | Uses the existing Medusa `/store/products` query helper |
+| Brands | `/{countryCode}/brands` | Derives brands from live `metadata.brand` values or `brand:` tags |
+| Wishlist | `/{countryCode}/wishlist` | Persisted, typed Zustand state with links to Medusa product pages |
+| Comparison | `/{countryCode}/compare` | Persisted side-by-side product state, limited to four products |
+| AI recommendations | Homepage rail | React Query calls `/store/ai/recommendations` and consumes live product data |
+| Reviews | Product detail pages | React Hook Form + Zod validation with device persistence |
+| Rewards | Account dashboard | Calculated from live Medusa order history; no fake external points API |
+| Notifications | Account dashboard | Persisted order and editorial notification preferences |
+| Settings | Account dashboard | Explicit AI recommendation consent control |
+| PWA and themes | Root layout | Manifest, service worker shell, light/dark mode, reduced-motion support |
+
+The storefront also includes Framer Motion reveal behavior, accessible focus states, semantic search labels, keyboard-friendly controls, responsive layouts, optimized product images, structured metadata, and an installable PWA manifest. Product reviews and dashboard preferences are intentionally device-persisted until the corresponding Medusa custom modules are enabled; the existing Medusa customer, order, address, cart, checkout, and product flows remain server-integrated.
+
+### Enterprise validation
+
+```bash
+NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_test_placeholder \
+NEXT_PUBLIC_MEDUSA_BACKEND_URL=http://localhost:9000 \
+NEXT_PUBLIC_DEFAULT_REGION=dk \
+NEXT_PUBLIC_BASE_URL=http://localhost:8000 \
+pnpm --filter @dtc/storefront lint
+
+pnpm --filter @dtc/storefront exec tsc --noEmit
+pnpm --filter @dtc/backend build
+```
+
+The current validation result is clean: storefront lint reports no warnings or errors, storefront TypeScript passes, and the Medusa backend build completes successfully. A full production `next build` still needs a reachable Medusa backend and a real publishable API key because catalog routes fetch live data during page-data collection.

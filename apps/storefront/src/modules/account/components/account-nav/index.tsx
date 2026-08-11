@@ -150,6 +150,11 @@ const AccountNav = ({
                   Orders
                 </AccountNavLink>
               </li>
+              <li><AccountNavLink href="/account/rewards" route={route!}>Rewards</AccountNavLink></li>
+              <li><AccountNavLink href="/account/notifications" route={route!}>Notifications</AccountNavLink></li>
+              <li><AccountNavLink href="/account/settings" route={route!}>Settings</AccountNavLink></li>
+              <li><LocalizedClientLink href="/wishlist" className="text-ui-fg-subtle hover:text-ui-fg-base">Wishlist</LocalizedClientLink></li>
+              <li><LocalizedClientLink href="/compare" className="text-ui-fg-subtle hover:text-ui-fg-base">Compare</LocalizedClientLink></li>
               <li className="text-grey-700">
                 <button
                   type="button"
