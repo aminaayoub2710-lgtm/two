@@ -1,0 +1,9 @@
+node_modules
+.pnpm-store
+.next
+.medusa
+.git
+.env
+.env.*
+coverage
+*.log
