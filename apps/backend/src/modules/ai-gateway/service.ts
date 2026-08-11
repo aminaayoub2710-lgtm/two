@@ -1,5 +1,5 @@
-import type { Logger } from "@medusajs/framework/types"
 import { MedusaError } from "@medusajs/framework/utils"
+import type { Logger } from "@medusajs/framework/types"
 
 type ProviderName = "ollama" | "openai" | "gemini" | "anthropic" | "deepseek" | "openrouter"
 
@@ -17,10 +17,23 @@ type ProviderConfig = {
   model: string
 }
 
+export type AILog = {
+  id: string
+  timestamp: string
+  provider: ProviderName
+  model: string
+  promptLength: number
+  responseLength: number
+  estimatedTokens: number
+  estimatedCostUsd: number
+  status: "success" | "error"
+}
+
 const env = (name: string, fallback = "") => process.env[name] || fallback
 
 export class AIGatewayService {
   private readonly logger: Logger
+  private static logs: AILog[] = []
 
   constructor({ logger }: { logger: Logger }) {
     this.logger = logger
@@ -73,6 +86,29 @@ export class AIGatewayService {
     return provider === "ollama" || Boolean(config.apiKey)
   }
 
+  private recordLog(log: Omit<AILog, "id" | "timestamp">) {
+    const fullLog: AILog = {
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      ...log,
+    }
+    AIGatewayService.logs.unshift(fullLog)
+    if (AIGatewayService.logs.length > 100) {
+      AIGatewayService.logs.pop()
+    }
+  }
+
+  getLogs(): AILog[] {
+    return AIGatewayService.logs
+  }
+
+  getUsageMetrics() {
+    const totalRequests = AIGatewayService.logs.length
+    const totalTokens = AIGatewayService.logs.reduce((sum, l) => sum + l.estimatedTokens, 0)
+    const totalCost = AIGatewayService.logs.reduce((sum, l) => sum + l.estimatedCostUsd, 0)
+    return { totalRequests, totalTokens, totalCostUsd: Number(totalCost.toFixed(4)) }
+  }
+
   private async generateWithOllama(config: ProviderConfig, options: GenerateTextOptions) {
     const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/api/generate`, {
       method: "POST",
@@ -106,12 +142,10 @@ export class AIGatewayService {
       "Content-Type": "application/json",
       Authorization: `Bearer ${config.apiKey}`,
     }
-
     if (provider === "openrouter") {
       headers["HTTP-Referer"] = env("OPENROUTER_SITE_URL", "http://localhost:9000")
       headers["X-Title"] = "CommerceMind AI"
     }
-
     const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers,
@@ -122,14 +156,12 @@ export class AIGatewayService {
         response_format: options.jsonMode ? { type: "json_object" } : undefined,
       }),
     })
-
     if (!response.ok) {
       throw new MedusaError(
         MedusaError.Types.UNEXPECTED_STATE,
         `${provider} responded with ${response.status}`
       )
     }
-
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>
     }
@@ -151,14 +183,12 @@ export class AIGatewayService {
         }),
       }
     )
-
     if (!response.ok) {
       throw new MedusaError(
         MedusaError.Types.UNEXPECTED_STATE,
         `Gemini responded with ${response.status}`
       )
     }
-
     const data = (await response.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
     }
@@ -180,14 +210,12 @@ export class AIGatewayService {
         messages: [{ role: "user", content: options.prompt }],
       }),
     })
-
     if (!response.ok) {
       throw new MedusaError(
         MedusaError.Types.UNEXPECTED_STATE,
         `Anthropic responded with ${response.status}`
       )
     }
-
     const data = (await response.json()) as { content?: Array<{ text?: string }> }
     return data.content?.[0]?.text || ""
   }
@@ -220,6 +248,19 @@ export class AIGatewayService {
       try {
         const content = await this.generateWithProvider(provider, config, options)
         if (content) {
+          const promptLength = options.prompt.length
+          const responseLength = content.length
+          const estimatedTokens = Math.round((promptLength + responseLength) / 4)
+          const estimatedCostUsd = provider === "ollama" ? 0 : Number((estimatedTokens * 0.000002).toFixed(6))
+          this.recordLog({
+            provider,
+            model: config.model,
+            promptLength,
+            responseLength,
+            estimatedTokens,
+            estimatedCostUsd,
+            status: "success",
+          })
           return { content, provider, model: config.model }
         }
       } catch (error) {
