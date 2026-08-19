@@ -1,108 +1,138 @@
-# CommerceMind AI — Docker Root Cause and Fix
+# CommerceMind AI — Docker Entrypoint Image Failure and Fix
 
-## Executive conclusion
+## Executive status
 
-The repository dependency declarations are correct. `apps/backend/package.json` declares `@medusajs/cli` at `2.18.0`, `apps/storefront/package.json` declares `next` at `15.5.21`, and both versions are present in the pnpm lockfile importers. The failure is caused by the interaction between the image build layout and the Compose development mounts: the image installs the workspace dependencies during `docker build`, then Compose mounts the source tree at `/workspace` and mounts fresh named volumes over `/workspace/node_modules` and the package-local `node_modules` directories. Those runtime volumes start empty and the previous containers had no startup step to repopulate them.
-
-The fix adds a deterministic development entrypoint to each image. At container startup, the entrypoint checks the exact runtime binary that the service needs. If it is missing, it runs `pnpm install --frozen-lockfile` from `/workspace`, which populates the mounted root and package-local volumes. It then verifies the binary again and starts the correct workspace script. PostgreSQL, Redis, and Ollama data volumes are unchanged and are never deleted by this fix.
-
-## Evidence collected
-
-| Evidence | Result |
-|---|---|
-| Backend manifest | `@medusajs/cli: 2.18.0` is declared in `apps/backend/package.json` |
-| Storefront manifest | `next: 15.5.21` is declared in `apps/storefront/package.json` |
-| Lockfile | Both runtime dependencies are present in the `apps/backend` and `apps/storefront` importer blocks |
-| Workspace | `pnpm-workspace.yaml` includes `apps/**` and excludes only generated `.medusa` output |
-| Package manager | Root `package.json` specifies `pnpm@10.11.1`; lockfile format is `9.0` |
-| Docker build | Both Dockerfiles run `pnpm install --frozen-lockfile` before copying source |
-| Runtime mounts | Compose binds `.:/workspace` and mounts named volumes over root and package-local `node_modules` |
-| Local install | After `pnpm install --frozen-lockfile`, `apps/backend/node_modules/@medusajs/cli/cli.js` and `apps/storefront/node_modules/next/dist/bin/next` both existed |
-| Static fix validation | Shell syntax and required Compose/Dockerfile wiring passed validation |
-
-The sandbox does not contain the Docker CLI (`docker: command not found`). Therefore, the required image inspection and live Compose runtime checks could not be executed in this environment. The report intentionally does not claim that the containers are already running or that the Docker fix has been live-proven here.
-
-## Files changed
-
-| File | Change |
-|---|---|
-| `Dockerfile.backend` | Copies and executes the backend dependency-healing entrypoint instead of invoking `pnpm dev` directly |
-| `Dockerfile.storefront` | Copies and executes the storefront dependency-healing entrypoint instead of invoking `pnpm dev` directly |
-| `docker/entrypoint-backend.sh` | Repairs mounted dependency volumes when the Medusa CLI binary is absent, then starts `@dtc/backend` |
-| `docker/entrypoint-storefront.sh` | Repairs mounted dependency volumes when the Next.js binary is absent, then starts `@dtc/storefront` |
-| `docker-compose.yml` | Preserves data volumes and adds `MEDUSA_INTERNAL_BACKEND_URL=http://backend:9000` for SSR networking |
-| `apps/storefront/src/lib/config.ts` | Uses the internal Docker hostname for server-side rendering while keeping the public localhost URL for browser requests |
-
-No Medusa package source, Medusa core file, PostgreSQL data volume, Redis data volume, or Ollama data volume was modified or deleted.
-
-## Exact runtime behavior after the fix
-
-The backend entrypoint performs the following sequence:
+The reported runtime failure is specific and reproducible at the image boundary:
 
 ```text
-cd /workspace
-if /workspace/apps/backend/node_modules/@medusajs/cli/cli.js is missing:
-    pnpm install --frozen-lockfile
-verify the CLI file exists
-exec pnpm --filter @dtc/backend dev
+exec /usr/local/bin/entrypoint-backend: no such file or directory
+exec /usr/local/bin/entrypoint-storefront: no such file or directory
 ```
 
-The storefront entrypoint follows the same pattern for `/workspace/apps/storefront/node_modules/next/dist/bin/next`, then executes `pnpm --filter @dtc/storefront dev`. This addresses the actual runtime state created by the Compose mounts instead of relying only on packages installed into the image layer.
+The repository contains the source scripts at `docker/entrypoint-backend.sh` and `docker/entrypoint-storefront.sh`, but the previous Docker change did not provide a sufficiently observable build-time guarantee that the scripts were present in the final image. The previous image therefore could start with an `ENTRYPOINT` pointing at a path that was absent from the image filesystem.
 
-## Commands executed in the sandbox
+The correction makes the image contract explicit in four ways. Each Dockerfile copies the script with an explicit `./docker/...` source path to the required extensionless runtime path, and also copies a `.sh` alias so the direct inspection path used during troubleshooting is valid. Each Dockerfile applies mode `755` and executes `test -f` and `test -x` during the image build. `.dockerignore` now explicitly re-includes the Docker directory and both scripts, and `.gitattributes` forces LF line endings for Docker shell scripts. The entrypoint files retain a valid `#!/bin/sh` interpreter.
 
-The following checks completed successfully in the available environment:
+This repository-side fix has passed static checks. Docker image construction and live Compose verification remain unverified in this sandbox because the Docker CLI is unavailable. No success claim is made for the runtime until the required image and container checks pass on a machine with Docker.
+
+## Root cause and evidence
+
+| Item | Evidence and interpretation |
+|---|---|
+| Observed failure | Both containers fail before application startup because their configured absolute entrypoint paths are absent from the image filesystem. |
+| Previous source paths | The source scripts are present at `docker/entrypoint-backend.sh` and `docker/entrypoint-storefront.sh`. |
+| Previous Dockerfile destinations | The prior Dockerfiles copied to `/usr/local/bin/entrypoint-backend` and `/usr/local/bin/entrypoint-storefront`, but did not provide a build-time file-presence assertion or the `.sh` inspection aliases. |
+| Build context | Compose uses `context: .` for both services and selects `Dockerfile.backend` or `Dockerfile.storefront`. |
+| Image tags | Compose now explicitly tags the built images as `commercemind-ai-backend:latest` and `commercemind-ai-storefront:latest`, matching the requested direct inspection commands. |
+| Ignore rules | The original `.dockerignore` did not explicitly exclude `docker/`, but it also had no positive exceptions. Explicit exceptions are now present. |
+| Current source state | Both scripts are tracked, executable, ASCII POSIX shell files with LF endings and `#!/bin/sh` as line 1. |
+| Current build contract | The Dockerfiles now perform explicit `COPY`, `chmod 755`, `test -f`, and `test -x` steps for both runtime paths. |
+| Data safety | PostgreSQL, Redis, and Ollama data volumes remain declared and untouched. No volume deletion or pruning command was added. |
+
+The exact cause of the already-built image discrepancy cannot be proven from this sandbox because the failing image is not available here and Docker is not installed. The evidence is consistent with an image built from an older commit, an incorrect build context, a stale image/tag, or a build process that did not include the `docker/` source directory. The new build-time assertions will fail the build instead of allowing an image with a missing entrypoint to be tagged as usable.
+
+## Corrected files
+
+| File | Correction |
+|---|---|
+| `Dockerfile.backend` | Uses `COPY ./docker/entrypoint-backend.sh /usr/local/bin/entrypoint-backend`; copies `/usr/local/bin/entrypoint-backend.sh` as an inspection alias; applies mode `755`; asserts file existence and executability; retains the extensionless `ENTRYPOINT`. |
+| `Dockerfile.storefront` | Uses the equivalent explicit storefront copy, alias, mode, and build-time assertions. |
+| `.dockerignore` | Adds `!docker/`, `!docker/entrypoint-backend.sh`, and `!docker/entrypoint-storefront.sh`. |
+| `.gitattributes` | Forces `docker/*.sh` to use LF line endings. |
+| `docker/entrypoint-backend.sh` | Remains a POSIX `#!/bin/sh` executable and heals mounted dependencies before starting the backend. |
+| `docker/entrypoint-storefront.sh` | Remains a POSIX `#!/bin/sh` executable and heals mounted dependencies before starting the storefront. |
+| `DOCKER_ROOT_CAUSE_AND_FIX.md` | Records the missing-entrypoint image evidence and the new verification procedure. |
+
+No Medusa core package, Medusa source file, business logic, PostgreSQL data volume, Redis data volume, or Ollama data volume was modified.
+
+## Relevant Dockerfile contract
+
+The backend image now contains the following build instructions:
+
+```dockerfile
+COPY ./docker/entrypoint-backend.sh /usr/local/bin/entrypoint-backend
+COPY ./docker/entrypoint-backend.sh /usr/local/bin/entrypoint-backend.sh
+RUN chmod 755 /usr/local/bin/entrypoint-backend /usr/local/bin/entrypoint-backend.sh \
+    && test -f /usr/local/bin/entrypoint-backend \
+    && test -x /usr/local/bin/entrypoint-backend
+ENTRYPOINT ["/usr/local/bin/entrypoint-backend"]
+```
+
+The storefront image uses the same contract with `entrypoint-storefront`. The extensionless paths are the actual `ENTRYPOINT` targets. The `.sh` paths are intentionally retained as direct inspection aliases so both the runtime path and the source-name inspection path can be checked.
+
+## Repository validations completed
+
+The following checks passed in the sandbox:
 
 ```text
 sh -n docker/entrypoint-backend.sh
 sh -n docker/entrypoint-storefront.sh
-# Static manifest and Compose assertions were run during validation.
-pnpm install --frozen-lockfile
-pnpm --filter @dtc/backend build
-pnpm --filter @dtc/storefront exec tsc --noEmit
-NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_test_placeholder pnpm --filter @dtc/storefront lint
+test -f docker/entrypoint-backend.sh
+test -f docker/entrypoint-storefront.sh
+test -x docker/entrypoint-backend.sh
+test -x docker/entrypoint-storefront.sh
+CRLF checks for both scripts
+Dockerfile COPY, chmod, test -f, and test -x assertions
+.dockerignore positive exceptions
+Git ignore checks for docker/ and both scripts
 git diff --check
 ```
 
-The local installation proved that the two required runtime files are generated by the current manifests and lockfile. The backend Medusa build completed successfully, the storefront TypeScript check completed successfully, and storefront lint completed with no warnings or errors when supplied a non-secret placeholder publishable key.
+The source scripts were also confirmed as `POSIX shell script, ASCII text executable`, with the first line `#!/bin/sh`. Git reported all three relevant paths as not ignored. The static validation also confirmed that the Compose file still contains the PostgreSQL, Redis, and Ollama data volume mappings.
 
-The following commands could not be executed because Docker is unavailable in the sandbox:
+The Docker CLI check returned:
+
+```text
+DOCKER_CLI_UNAVAILABLE
+```
+
+Consequently, these operations were not executable in the sandbox:
 
 ```text
 docker compose build --no-cache backend storefront
 docker run --rm commercemind-ai-backend:latest ...
 docker run --rm commercemind-ai-storefront:latest ...
-docker image inspect commercemind-ai-backend:latest
-docker image inspect commercemind-ai-storefront:latest
 docker compose up -d
 docker compose ps
 docker compose logs --tail=100 backend
 docker compose logs --tail=100 storefront
 ```
 
-## PowerShell verification procedure
+## Required Docker verification on the user machine
 
-Run these commands from the repository root on a machine with Docker Desktop running. They do not remove `postgres_data`, `redis_data`, or `ollama_data`.
+Run these commands from the repository root on a machine with Docker Desktop running:
 
 ```powershell
 docker compose down
 docker compose build --no-cache backend storefront
-docker run --rm commercemind-ai-backend:latest sh -lc "test -f /workspace/apps/backend/node_modules/@medusajs/cli/cli.js && echo CLI_PRESENT || echo CLI_MISSING"
-docker run --rm commercemind-ai-storefront:latest sh -lc "test -f /workspace/apps/storefront/node_modules/next/dist/bin/next && echo NEXT_PRESENT || echo NEXT_MISSING"
+
+docker run --rm commercemind-ai-backend:latest sh -lc "ls -l /usr/local/bin/entrypoint-backend && head -n 3 /usr/local/bin/entrypoint-backend && ls -l /usr/local/bin/entrypoint-backend.sh && head -n 3 /usr/local/bin/entrypoint-backend.sh"
+docker run --rm commercemind-ai-storefront:latest sh -lc "ls -l /usr/local/bin/entrypoint-storefront && head -n 3 /usr/local/bin/entrypoint-storefront && ls -l /usr/local/bin/entrypoint-storefront.sh && head -n 3 /usr/local/bin/entrypoint-storefront.sh"
 docker compose up -d
 docker compose ps
 docker compose logs --tail=100 backend
 docker compose logs --tail=100 storefront
 ```
 
-The expected final state is `Up` for PostgreSQL, Redis, Ollama, Backend, and Storefront, with PostgreSQL marked `healthy`; neither application should show `Restarting`. If either entrypoint reports that its binary is still missing after installation, preserve the logs and inspect the image and volume mounts before making further changes.
+Because Compose now sets explicit `image:` names, the two image inspection commands target the exact images produced by `docker compose build`. They must show both extensionless runtime paths and `.sh` aliases. The `ls -l` output must include executable bits, and the first three lines must begin with `#!/bin/sh` followed by `set -eu`. The final `docker compose ps` output must show `backend` and `storefront` as `Up`; neither may be `Restarting`. PostgreSQL should remain healthy, and Redis and Ollama should be running.
+
+These commands do not delete or prune `postgres_data`, `redis_data`, or `ollama_data`. Do not substitute them with `docker compose down -v`, `docker volume prune`, or any command that removes named volumes.
 
 ## Verification status
 
-**Code and dependency architecture:** verified in the sandbox.
+| Verification layer | Status |
+|---|---|
+| Repository source paths | Passed |
+| Entrypoint interpreter and LF endings | Passed |
+| Entrypoint executable source permissions | Passed |
+| Dockerfile copy and build-time assertions | Passed by static inspection |
+| `.dockerignore` and Git ignore behavior | Passed |
+| Actual image filesystem | Not yet verified; Docker unavailable in sandbox |
+| Backend container state | Not yet verified; Docker unavailable in sandbox |
+| Storefront container state | Not yet verified; Docker unavailable in sandbox |
 
-**Live Docker image contents:** not verified because Docker is unavailable in the sandbox.
+The fix must be considered **runtime-pending** until the image inspection and Compose checks above prove the files exist inside both images and both containers remain `Up` without restart loops.
 
-**Live Docker Compose runtime:** not verified because Docker is unavailable in the sandbox.
+## References
 
-Accordingly, this change is not labelled as a fully Docker-verified success until the PowerShell/Docker commands above complete and show both application containers remaining in the `Up` state.
+[1]: https://github.com/aminaayoub2710-lgtm/two "CommerceMind AI repository"

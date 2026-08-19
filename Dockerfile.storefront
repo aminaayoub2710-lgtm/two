@@ -11,8 +11,11 @@ COPY apps/storefront/package.json apps/storefront/package.json
 RUN pnpm install --frozen-lockfile
 
 COPY . .
-COPY docker/entrypoint-storefront.sh /usr/local/bin/entrypoint-storefront
-RUN chmod +x /usr/local/bin/entrypoint-storefront
+COPY ./docker/entrypoint-storefront.sh /usr/local/bin/entrypoint-storefront
+COPY ./docker/entrypoint-storefront.sh /usr/local/bin/entrypoint-storefront.sh
+RUN chmod 755 /usr/local/bin/entrypoint-storefront /usr/local/bin/entrypoint-storefront.sh \
+    && test -f /usr/local/bin/entrypoint-storefront \
+    && test -x /usr/local/bin/entrypoint-storefront
 WORKDIR /workspace/apps/storefront
 
 ENV NODE_ENV=development

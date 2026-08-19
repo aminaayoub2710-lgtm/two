@@ -38,6 +38,7 @@ services:
       - ollama_data:/root/.ollama
 
   backend:
+    image: commercemind-ai-backend:latest
     build:
       context: .
       dockerfile: Dockerfile.backend
@@ -74,6 +75,7 @@ services:
       - backend_app_node_modules:/workspace/apps/backend/node_modules
 
   storefront:
+    image: commercemind-ai-storefront:latest
     build:
       context: .
       dockerfile: Dockerfile.storefront
