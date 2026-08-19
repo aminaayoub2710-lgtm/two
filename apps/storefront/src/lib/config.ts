@@ -1,10 +1,13 @@
 import { getLocaleHeader } from "@lib/util/get-locale-header"
 import Medusa, { FetchArgs, FetchInput } from "@medusajs/js-sdk"
 
-// Defaults to standard port for Medusa server
+// Browser requests use the public host URL; server-side rendering inside Docker
+// uses the internal Compose service hostname when it is provided.
 let MEDUSA_BACKEND_URL = "http://localhost:9000"
 
-if (process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL) {
+if (typeof window === "undefined" && process.env.MEDUSA_INTERNAL_BACKEND_URL) {
+  MEDUSA_BACKEND_URL = process.env.MEDUSA_INTERNAL_BACKEND_URL
+} else if (process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL) {
   MEDUSA_BACKEND_URL = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL
 }
 
