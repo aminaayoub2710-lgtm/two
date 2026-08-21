@@ -8,26 +8,23 @@ import LocalizedClientLink from "@modules/common/components/localized-client-lin
 import { Text, clx } from "@modules/common/components/ui"
 import { Fragment } from "react"
 import CountrySelect from "../country-select"
-import LanguageSelect from "../language-select"
-import { Locale } from "@lib/data/locales"
-
-
-const SideMenuItems = {
-  Home: "/",
-  Store: "/store",
-  Account: "/account",
-  Cart: "/cart",
-}
+import LanguageSwitcher from "../language-switcher"
+import { useTranslations } from "@/i18n/client"
 
 type SideMenuProps = {
   regions: HttpTypes.StoreRegion[] | null
-  locales: Locale[] | null
-  currentLocale: string | null
 }
 
-const SideMenu = ({ regions, locales, currentLocale }: SideMenuProps) => {
+const sideMenuItems = [
+  { key: "home", href: "/" },
+  { key: "shop", href: "/store" },
+  { key: "account", href: "/account" },
+  { key: "cart", href: "/cart" },
+] as const
+
+const SideMenu = ({ regions }: SideMenuProps) => {
   const countryToggleState = useToggleState()
-  const languageToggleState = useToggleState()
+  const { t } = useTranslations()
 
   return (
     <div className="h-full">
@@ -38,9 +35,10 @@ const SideMenu = ({ regions, locales, currentLocale }: SideMenuProps) => {
               <div className="relative flex h-full">
                 <Popover.Button
                   data-testid="nav-menu-button"
+                  aria-label={t("navigation.openMenu")}
                   className="relative h-full flex items-center transition-all ease-out duration-200 focus:outline-none hover:text-ui-fg-base"
                 >
-                  Menu
+                  {t("common.menu")}
                 </Popover.Button>
               </div>
 
@@ -68,46 +66,39 @@ const SideMenu = ({ regions, locales, currentLocale }: SideMenuProps) => {
                     className="flex flex-col h-full bg-[rgba(3,7,18,0.5)] rounded-rounded justify-between p-6"
                   >
                     <div className="flex justify-end" id="xmark">
-                      <button data-testid="close-menu-button" onClick={close}>
+                      <button
+                        type="button"
+                        data-testid="close-menu-button"
+                        aria-label={t("navigation.closeMenu")}
+                        onClick={close}
+                      >
                         <XMark />
                       </button>
                     </div>
+
                     <ul className="flex flex-col gap-6 items-start justify-start">
-                      {Object.entries(SideMenuItems).map(([name, href]) => {
-                        return (
-                          <li key={name}>
-                            <LocalizedClientLink
-                              href={href}
-                              className="text-3xl leading-10 hover:text-ui-fg-disabled"
-                              onClick={close}
-                              data-testid={`${name.toLowerCase()}-link`}
-                            >
-                              {name}
-                            </LocalizedClientLink>
-                          </li>
-                        )
-                      })}
+                      {sideMenuItems.map(({ key, href }) => (
+                        <li key={key}>
+                          <LocalizedClientLink
+                            href={href}
+                            className="text-3xl leading-10 hover:text-ui-fg-disabled"
+                            onClick={close}
+                            data-testid={`${key}-link`}
+                          >
+                            {t(`navigation.${key}`)}
+                          </LocalizedClientLink>
+                        </li>
+                      ))}
                     </ul>
+
                     <div className="flex flex-col gap-y-6">
-                      {!!locales?.length && (
-                        <div
-                          className="flex justify-between"
-                          onMouseEnter={languageToggleState.open}
-                          onMouseLeave={languageToggleState.close}
-                        >
-                          <LanguageSelect
-                            toggleState={languageToggleState}
-                            locales={locales}
-                            currentLocale={currentLocale}
-                          />
-                          <ArrowRightMini
-                            className={clx(
-                              "transition-transform duration-150",
-                              languageToggleState.state ? "-rotate-90" : ""
-                            )}
-                          />
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between">
+                        <LanguageSwitcher />
+                        <span className="text-xs text-ui-fg-muted">
+                          {t("common.language")}
+                        </span>
+                      </div>
+
                       <div
                         className="flex justify-between"
                         onMouseEnter={countryToggleState.open}
@@ -126,9 +117,9 @@ const SideMenu = ({ regions, locales, currentLocale }: SideMenuProps) => {
                           )}
                         />
                       </div>
+
                       <Text className="flex justify-between txt-compact-small">
-                        © {new Date().getFullYear()} Medusa Store. All rights
-                        reserved.
+                        © {new Date().getFullYear()} CommerceMind AI. {t("common.allRightsReserved")}
                       </Text>
                     </div>
                   </div>

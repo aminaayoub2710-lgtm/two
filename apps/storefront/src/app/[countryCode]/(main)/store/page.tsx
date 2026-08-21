@@ -1,12 +1,12 @@
 import { Metadata } from "next"
-
 import { parseOptionValueIds } from "@lib/util/product-option-filters"
 import { SortOptions } from "@modules/store/components/refinement-list/sort-products"
 import StoreTemplate from "@modules/store/templates"
+import { getServerTranslator } from "@/i18n/server"
 
-export const metadata: Metadata = {
-  title: "Store",
-  description: "Explore all of our products.",
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getServerTranslator()
+  return { title: t("navigation.shop"), description: t("products.all") }
 }
 
 type StorePageSearchParams = Record<string, string | string[] | undefined> & {
@@ -14,26 +14,15 @@ type StorePageSearchParams = Record<string, string | string[] | undefined> & {
   page?: string
   optionValueIds?: string | string[]
 }
-
 type Params = {
   searchParams: Promise<StorePageSearchParams>
-  params: Promise<{
-    countryCode: string
-  }>
+  params: Promise<{ countryCode: string }>
 }
 
 export default async function StorePage(props: Params) {
-  const params = await props.params;
-  const searchParams = await props.searchParams;
+  const params = await props.params
+  const searchParams = await props.searchParams
   const { sortBy, page } = searchParams
   const optionValueIds = parseOptionValueIds(searchParams)
-
-  return (
-    <StoreTemplate
-      sortBy={sortBy}
-      page={page}
-      countryCode={params.countryCode}
-      optionValueIds={optionValueIds}
-    />
-  )
+  return <StoreTemplate sortBy={sortBy} page={page} countryCode={params.countryCode} optionValueIds={optionValueIds} />
 }

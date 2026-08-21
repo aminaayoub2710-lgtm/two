@@ -1,9 +1,10 @@
 import { Metadata } from "next"
 import CompareClient from "@modules/commerce/components/compare-client"
+import { getServerTranslator } from "@/i18n/server"
 
-export const metadata: Metadata = {
-  title: "Compare products",
-  description: "Compare your saved CommerceMind products side by side.",
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getServerTranslator()
+  return { title: t("navigation.compare"), description: t("commerce.compareDescription") }
 }
 
 export default function ComparePage() {

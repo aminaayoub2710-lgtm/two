@@ -5,10 +5,12 @@ import SearchLauncher from "@modules/common/components/search-launcher"
 import ThemeToggle from "@modules/common/components/theme-toggle"
 import { HeartIcon } from "@modules/common/components/icons"
 import { useStorefrontStore } from "@lib/storefront-store"
+import { useTranslations } from "@/i18n/client"
 
 export default function NavUtilities() {
   const wishlistCount = useStorefrontStore((state) => state.wishlist.length)
   const comparisonCount = useStorefrontStore((state) => state.comparison.length)
+  const { t } = useTranslations()
 
   return (
     <div className="flex items-center gap-3">
@@ -17,7 +19,7 @@ export default function NavUtilities() {
       </div>
       <LocalizedClientLink
         href="/wishlist"
-        aria-label={`Wishlist, ${wishlistCount} saved`}
+        aria-label={`${t("navigation.wishlist")}, ${wishlistCount}`}
         className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-ui-fg-subtle transition hover:border-ui-border-base hover:text-ui-fg-base"
       >
         <HeartIcon size={16} />
@@ -27,7 +29,7 @@ export default function NavUtilities() {
         href="/compare"
         className="hidden text-xs text-ui-fg-subtle transition hover:text-ui-fg-base md:block"
       >
-        Compare{comparisonCount > 0 ? ` (${comparisonCount})` : ""}
+        {t("navigation.compare")}{comparisonCount > 0 ? ` (${comparisonCount})` : ""}
       </LocalizedClientLink>
       <ThemeToggle />
     </div>
