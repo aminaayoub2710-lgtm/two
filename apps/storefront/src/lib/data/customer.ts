@@ -18,6 +18,8 @@ import {
   setAuthToken,
   setPendingCustomer,
 } from "./cookies"
+import { getLocale } from "./locale-actions"
+import { getLocaleCountryPath, normalizeLocale } from "@/i18n/config"
 
 export type CustomerAuthState =
   | { state: "error"; error: string }
@@ -260,7 +262,8 @@ export async function signout(countryCode: string) {
   const cartCacheTag = await getCacheTag("carts")
   revalidateTag(cartCacheTag)
 
-  redirect(`/${countryCode}/account`)
+  const locale = normalizeLocale((await getLocale()) || undefined)
+  redirect(getLocaleCountryPath(locale, countryCode, "/account"))
 }
 
 export async function transferCart() {

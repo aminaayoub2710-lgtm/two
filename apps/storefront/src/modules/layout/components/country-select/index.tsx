@@ -12,6 +12,7 @@ import ReactCountryFlag from "react-country-flag"
 
 import { StateType } from "@lib/hooks/use-toggle-state"
 import { useParams, usePathname } from "next/navigation"
+import { getPathAfterLocaleAndCountry, isAppLocale, localeFromPathname } from "@/i18n/config"
 import { updateRegion } from "@lib/data/cart"
 import { HttpTypes } from "@medusajs/types"
 
@@ -29,8 +30,13 @@ type CountrySelectProps = {
 const CountrySelect = ({ toggleState, regions }: CountrySelectProps) => {
   const [current, setCurrent] = useState<CountryOption | undefined>(undefined)
 
-  const { countryCode } = useParams()
-  const currentPath = usePathname().split(`/${countryCode}`)[1]
+  const routeParams = useParams<{ countryCode?: string }>()
+  const pathname = usePathname() || "/"
+  const pathSegments = pathname.split("/").filter(Boolean)
+  const publicCountryCode = isAppLocale(pathSegments[0]) ? pathSegments[1] : pathSegments[0]
+  const countryCode = publicCountryCode || routeParams.countryCode
+  const locale = localeFromPathname(pathname)
+  const currentPath = getPathAfterLocaleAndCountry(pathname)
 
   const { state, close } = toggleState
 
@@ -56,7 +62,7 @@ const CountrySelect = ({ toggleState, regions }: CountrySelectProps) => {
   }, [options, countryCode])
 
   const handleChange = (option: CountryOption) => {
-    updateRegion(option.country, currentPath)
+    updateRegion(option.country, currentPath, locale)
     close()
   }
 

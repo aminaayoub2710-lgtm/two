@@ -56,3 +56,10 @@ export const getLocaleCountryPath = (
   const normalizedPath = path ? (path.startsWith("/") ? path : `/${path}`) : ""
   return `/${locale}/${countryCode}${normalizedPath}`
 }
+
+export const getPathAfterLocaleAndCountry = (pathname: string): string => {
+  const segments = pathname.split("/").filter(Boolean)
+  const offset = isAppLocale(segments[0]) ? 2 : 1
+  const remainder = segments.slice(offset).join("/")
+  return remainder ? `/${remainder}` : "/"
+}

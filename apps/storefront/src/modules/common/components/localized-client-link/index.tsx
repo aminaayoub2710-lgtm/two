@@ -21,10 +21,8 @@ const LocalizedClientLink = ({
   const pathname = usePathname() || "/en/dk"
   const pathSegments = pathname.split("/").filter(Boolean)
   const currentLocale = localeFromPathname(pathname)
-  const currentCountryCode =
-    countryCode ||
-    (isAppLocale(pathSegments[0]) ? pathSegments[1] : pathSegments[0]) ||
-    "dk"
+  const pathCountryCode = isAppLocale(pathSegments[0]) ? pathSegments[1] : pathSegments[0]
+  const currentCountryCode = pathCountryCode || countryCode || "dk"
   const normalizedHref = href.startsWith("/") ? href : `/${href}`
   const target = `/${currentLocale}/${currentCountryCode}${normalizedHref === "/" ? "" : normalizedHref}`
 

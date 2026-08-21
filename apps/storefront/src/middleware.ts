@@ -1,6 +1,6 @@
 import { HttpTypes } from "@medusajs/types"
 import { NextRequest, NextResponse } from "next/server"
-import { defaultLocale, isAppLocale, type AppLocale } from "./i18n/config"
+import { defaultLocale, isAppLocale, normalizeLocale, type AppLocale } from "./i18n/config"
 
 const BACKEND_URL =
   process.env.MEDUSA_INTERNAL_BACKEND_URL ||
@@ -107,6 +107,16 @@ function setCacheCookie(response: NextResponse, cacheId: string, hasCookie: bool
   return response
 }
 
+function setLocaleCookie(response: NextResponse, locale: AppLocale) {
+  response.cookies.set("_medusa_locale", normalizeLocale(locale), {
+    maxAge: 60 * 60 * 24 * 365,
+    httpOnly: false,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  })
+  return response
+}
+
 /**
  * Handles locale prefixes independently from Medusa country/region routing.
  * Public URLs are `/[locale]/[countryCode]/...`, while the existing App Router
@@ -140,7 +150,7 @@ export async function middleware(request: NextRequest) {
         headers: withCommerceHeaders(request, locale, countryCode),
       },
     })
-    return setCacheCookie(response, cacheId, !!cacheIdCookie)
+    return setLocaleCookie(setCacheCookie(response, cacheId, !!cacheIdCookie), locale)
   }
 
   if (!hasLocale && urlHasCountry) {
@@ -149,7 +159,7 @@ export async function middleware(request: NextRequest) {
         headers: withCommerceHeaders(request, defaultLocale, countryCode),
       },
     })
-    return setCacheCookie(response, cacheId, !!cacheIdCookie)
+    return setLocaleCookie(setCacheCookie(response, cacheId, !!cacheIdCookie), locale)
   }
 
   const pathAfterLocale = hasLocale
@@ -158,7 +168,8 @@ export async function middleware(request: NextRequest) {
   const redirectPath = pathAfterLocale === "/" ? "" : pathAfterLocale
   const queryString = request.nextUrl.search || ""
   const redirectUrl = `${request.nextUrl.origin}/${locale}/${countryCode}${redirectPath}${queryString}`
-  return NextResponse.redirect(redirectUrl, 307)
+  const response = NextResponse.redirect(redirectUrl, 307)
+  return setLocaleCookie(setCacheCookie(response, cacheId, !!cacheIdCookie), locale)
 }
 
 export const config = {

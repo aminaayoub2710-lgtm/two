@@ -15,6 +15,7 @@ import {
 } from "./cookies"
 import { getRegion } from "./regions"
 import { getLocale } from "./locale-actions"
+import { getLocaleCountryPath, normalizeLocale } from "@/i18n/config"
 
 /**
  * Retrieves a cart by its ID. If no ID is provided, it will use the cart ID from the cookies.
@@ -386,9 +387,9 @@ export async function setAddresses(currentState: unknown, formData: FormData) {
     return e instanceof Error ? e.message : "Unable to update addresses"
   }
 
-  redirect(
-    `/${formData.get("shipping_address.country_code")}/checkout?step=delivery`
-  )
+  const locale = normalizeLocale((await getLocale()) || undefined)
+  const countryCode = String(formData.get("shipping_address.country_code") || "")
+  redirect(getLocaleCountryPath(locale, countryCode, "/checkout?step=delivery"))
 }
 
 /**
@@ -420,11 +421,16 @@ export async function placeOrder(cartId?: string) {
     const countryCode =
       cartRes.order.shipping_address?.country_code?.toLowerCase()
 
+    if (!countryCode) {
+      throw new Error("Order is missing a shipping country code")
+    }
+
     const orderCacheTag = await getCacheTag("orders")
     revalidateTag(orderCacheTag)
 
     removeCartId()
-    redirect(`/${countryCode}/order/${cartRes?.order.id}/confirmed`)
+    const locale = normalizeLocale((await getLocale()) || undefined)
+    redirect(getLocaleCountryPath(locale, countryCode, `/order/${cartRes?.order.id}/confirmed`))
   }
 
   return cartRes.cart
@@ -435,7 +441,7 @@ export async function placeOrder(cartId?: string) {
  * @param regionId
  * @param countryCode
  */
-export async function updateRegion(countryCode: string, currentPath: string) {
+export async function updateRegion(countryCode: string, currentPath: string, localeCode?: string) {
   const cartId = await getCartId()
   const region = await getRegion(countryCode)
 
@@ -455,7 +461,9 @@ export async function updateRegion(countryCode: string, currentPath: string) {
   const productsCacheTag = await getCacheTag("products")
   revalidateTag(productsCacheTag)
 
-  redirect(`/${countryCode}${currentPath}`)
+  const locale = normalizeLocale(localeCode || (await getLocale()) || undefined)
+  const routePath = currentPath === "/" ? "" : currentPath
+  redirect(getLocaleCountryPath(locale, countryCode, routePath))
 }
 
 export async function listCartOptions() {
