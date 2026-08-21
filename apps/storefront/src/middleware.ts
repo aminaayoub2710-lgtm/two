@@ -1,6 +1,12 @@
 import { HttpTypes } from "@medusajs/types"
 import { NextRequest, NextResponse } from "next/server"
-import { defaultLocale, isAppLocale, normalizeLocale, type AppLocale } from "./i18n/config"
+import {
+  defaultLocale,
+  isAppLocale,
+  isCountryCodeSegment,
+  normalizeLocale,
+  type AppLocale,
+} from "./i18n/config"
 
 const BACKEND_URL =
   process.env.MEDUSA_INTERNAL_BACKEND_URL ||
@@ -129,7 +135,24 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  const internalRewrite = request.headers.get("x-commerce-internal-route") === "1"
+  if (internalRewrite) {
+    const segments = request.nextUrl.pathname.split("/").filter(Boolean)
+    const locale = normalizeLocale(request.headers.get("x-commerce-locale") || undefined)
+    const countryCode =
+      request.headers.get("x-commerce-country") || segments[0] || DEFAULT_REGION
+    const cacheIdCookie = request.cookies.get("_medusa_cache_id")
+    const cacheId = cacheIdCookie?.value || crypto.randomUUID()
+    const response = NextResponse.next({
+      request: {
+        headers: withCommerceHeaders(request, locale, countryCode),
+      },
+    })
+    return setLocaleCookie(setCacheCookie(response, cacheId, !!cacheIdCookie), locale)
+  }
+
   const cacheIdCookie = request.cookies.get("_medusa_cache_id")
+
   const cacheId = cacheIdCookie?.value || crypto.randomUUID()
   const regionMap = await getRegionMap(cacheId)
   const segments = request.nextUrl.pathname.split("/").filter(Boolean)
@@ -141,13 +164,21 @@ export async function middleware(request: NextRequest) {
     (await getCountryCode(request, regionMap, urlCountryCode)) || DEFAULT_REGION
   const urlHasCountry = !!urlCountryCode && regionMap.has(urlCountryCode)
 
-  if (hasLocale && urlHasCountry) {
-    const internalPath = `/${segments.slice(1).join("/")}` || `/${countryCode}`
+  const localizedCountrySegment = hasLocale ? segments[1]?.toLowerCase() : undefined
+  const isLocalizedPublicPath =
+    hasLocale &&
+    isCountryCodeSegment(localizedCountrySegment) &&
+    (regionMap.has(localizedCountrySegment) || localizedCountrySegment === DEFAULT_REGION)
+
+  if (isLocalizedPublicPath && localizedCountrySegment) {
+    const internalPath = `/${segments.slice(1).join("/")}`
     const rewriteUrl = request.nextUrl.clone()
     rewriteUrl.pathname = internalPath
+    const rewriteHeaders = withCommerceHeaders(request, locale, localizedCountrySegment)
+    rewriteHeaders.set("x-commerce-internal-route", "1")
     const response = NextResponse.rewrite(rewriteUrl, {
       request: {
-        headers: withCommerceHeaders(request, locale, countryCode),
+        headers: rewriteHeaders,
       },
     })
     return setLocaleCookie(setCacheCookie(response, cacheId, !!cacheIdCookie), locale)

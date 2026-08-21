@@ -25,6 +25,9 @@ export const localeDirections: Record<AppLocale, "ltr" | "rtl"> = {
 export const isAppLocale = (value: string | undefined): value is AppLocale =>
   !!value && (locales as readonly string[]).includes(value.toLowerCase())
 
+export const isCountryCodeSegment = (value: string | undefined): value is string =>
+  !!value && /^[a-z]{2}$/i.test(value)
+
 export const normalizeLocale = (value: string | undefined): AppLocale =>
   isAppLocale(value) ? (value!.toLowerCase() as AppLocale) : defaultLocale
 
